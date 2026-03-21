@@ -27,7 +27,8 @@ export class OpenAiResponsesProvider implements AiProvider {
           content: [
             ...images.map((image) => ({
               type: "input_image" as const,
-              image_url: `data:${image.mimeType};base64,${image.base64Data}`
+              image_url: `data:${image.mimeType};base64,${image.base64Data}`,
+              detail: "auto" as const
             })),
             { type: "input_text" as const, text: prompt }
           ]
