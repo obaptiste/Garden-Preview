@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import { buildGardenPrompt } from "@/lib/prompt-builder";
 import { conceptRequestSchema, gardenDesignResponseSchema, type ConceptRequestInput, type GardenDesignResponse } from "@/lib/schemas";
-import { OpenAiResponsesProvider, type AiProvider } from "@/lib/ai/provider";
+import { OpenAiResponsesProvider, AnthropicProvider, FallbackAiProvider, type AiProvider } from "@/lib/ai/provider";
 
 function extractJson(raw: string): string {
   const jsonMatch = raw.match(/\{[\s\S]*\}$/);
@@ -12,14 +12,24 @@ function formatValidationError(error: ZodError): string {
   return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
 }
 
+function createDefaultProvider(): AiProvider {
+  const providers: AiProvider[] = [];
+  if (process.env.OPENAI_API_KEY) {
+    providers.push(new OpenAiResponsesProvider(process.env.OPENAI_API_KEY));
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    providers.push(new AnthropicProvider(process.env.ANTHROPIC_API_KEY));
+  }
+  if (providers.length === 0) {
+    throw new Error("No AI provider configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.");
+  }
+  return providers.length === 1 ? providers[0] : new FallbackAiProvider(providers);
+}
+
 export async function generateGardenConcepts(
   rawInput: ConceptRequestInput,
-  provider: AiProvider = new OpenAiResponsesProvider(process.env.OPENAI_API_KEY ?? "")
+  provider: AiProvider = createDefaultProvider()
 ): Promise<GardenDesignResponse> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("Server configuration missing OPENAI_API_KEY.");
-  }
-
   const input = conceptRequestSchema.parse(rawInput);
   const prompt = buildGardenPrompt(input);
   const images = input.images.map((image) => ({
